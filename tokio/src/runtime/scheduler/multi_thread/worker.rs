@@ -507,7 +507,14 @@ fn run(worker: Arc<Worker>) {
     // worker and there is nothing further to do.
     let core = match worker.core.take() {
         Some(core) => core,
-        None => return,
+        None => {
+            println!(
+                "({:?} {:?}) worker.run didn't have a core",
+                std::thread::current().id(),
+                std::thread::current().name()
+            );
+            return;
+        }
     };
 
     let handle = scheduler::Handle::MultiThread(worker.handle.clone());
