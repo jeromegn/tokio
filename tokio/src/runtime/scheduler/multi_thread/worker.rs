@@ -332,7 +332,9 @@ where
                     let core = cx.worker.core.take();
                     let mut cx_core = cx.core.borrow_mut();
                     println!(
-                        "Reset dropped worker core is_some? {}, context core is_some? {}",
+                        "({:?} {:?}) Reset dropped worker core is_some? {}, context core is_some? {}",
+                        std::thread::current().id(),
+                        std::thread::current().name(),
                         core.is_some(),
                         cx_core.is_some()
                     );
