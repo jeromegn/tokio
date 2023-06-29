@@ -356,6 +356,11 @@ where
             (context::EnterRuntime::Entered { .. }, Some(cx)) => {
                 // We are on a thread pool runtime thread, so we just need to
                 // set up blocking.
+                println!(
+                    "({:?} {:?}) block_in_place is on thread pool",
+                    std::thread::current().id(),
+                    std::thread::current().name()
+                );
                 had_entered = true;
                 cx
             }
@@ -369,6 +374,11 @@ where
                 // _only_ okay if we are in a thread pool runtime's block_on
                 // method:
                 if allow_block_in_place {
+                    println!(
+                        "({:?} {:?}) block_in_place is NOT on thread pool",
+                        std::thread::current().id(),
+                        std::thread::current().name()
+                    );
                     had_entered = true;
                     return Ok(());
                 } else {
@@ -382,11 +392,21 @@ where
             (context::EnterRuntime::NotEntered, Some(_)) => {
                 // This is a nested call to block_in_place (we already exited).
                 // All the necessary setup has already been done.
+                println!(
+                    "({:?} {:?}) block_in_place nested call",
+                    std::thread::current().id(),
+                    std::thread::current().name()
+                );
                 return Ok(());
             }
             (context::EnterRuntime::NotEntered, None) => {
                 // We are outside of the tokio runtime, so blocking is fine.
                 // We can also skip all of the thread pool blocking setup steps.
+                println!(
+                    "({:?} {:?}) block_in_place outside of tokio runtime",
+                    std::thread::current().id(),
+                    std::thread::current().name()
+                );
                 return Ok(());
             }
         };
@@ -397,6 +417,11 @@ where
             None => {
                 // // reset this here, we don't want the Reset to happen, it will happen upstream
                 // had_entered = false;
+                println!(
+                    "({:?} {:?}) block_in_place no context core",
+                    std::thread::current().id(),
+                    std::thread::current().name()
+                );
                 return Ok(());
             }
         };
@@ -428,9 +453,19 @@ where
         // Unset the current task's budget. Blocking sections are not
         // constrained by task budgets.
         let _reset = Reset(coop::stop());
+        println!(
+            "({:?} {:?}) block_in_place Reset has been instantiated",
+            std::thread::current().id(),
+            std::thread::current().name()
+        );
 
         crate::runtime::context::exit_runtime(f)
     } else {
+        println!(
+            "({:?} {:?}) block_in_place no reset!",
+            std::thread::current().id(),
+            std::thread::current().name()
+        );
         f()
     }
 }
