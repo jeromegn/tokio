@@ -331,6 +331,11 @@ where
                 if let Some(cx) = maybe_cx {
                     let core = cx.worker.core.take();
                     let mut cx_core = cx.core.borrow_mut();
+                    println!(
+                        "Reset dropped worker core is_some? {}, context core is_some? {}",
+                        core.is_some(),
+                        cx_core.is_some()
+                    );
                     assert!(cx_core.is_none());
                     *cx_core = core;
 
@@ -388,8 +393,8 @@ where
         let core = match cx.core.borrow_mut().take() {
             Some(core) => core,
             None => {
-                // reset had_entered or else `Reset` might break
-                had_entered = false;
+                // // reset this here, we don't want the Reset to happen, it will happen upstream
+                // had_entered = false;
                 return Ok(());
             }
         };
