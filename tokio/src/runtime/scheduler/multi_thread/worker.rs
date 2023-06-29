@@ -345,20 +345,18 @@ where
     let mut had_entered = false;
 
     let setup_result = with_current(|maybe_cx| {
-        match (
-            crate::runtime::context::current_enter_context(),
-            maybe_cx.is_some(),
-        ) {
-            (context::EnterRuntime::Entered { .. }, true) => {
+        let cx = match (crate::runtime::context::current_enter_context(), maybe_cx) {
+            (context::EnterRuntime::Entered { .. }, Some(cx)) => {
                 // We are on a thread pool runtime thread, so we just need to
                 // set up blocking.
                 had_entered = true;
+                cx
             }
             (
                 context::EnterRuntime::Entered {
                     allow_block_in_place,
                 },
-                false,
+                None,
             ) => {
                 // We are on an executor, but _not_ on the thread pool.  That is
                 // _only_ okay if we are in a thread pool runtime's block_on
@@ -374,24 +372,26 @@ where
                     );
                 }
             }
-            (context::EnterRuntime::NotEntered, true) => {
+            (context::EnterRuntime::NotEntered, Some(_)) => {
                 // This is a nested call to block_in_place (we already exited).
                 // All the necessary setup has already been done.
                 return Ok(());
             }
-            (context::EnterRuntime::NotEntered, false) => {
+            (context::EnterRuntime::NotEntered, None) => {
                 // We are outside of the tokio runtime, so blocking is fine.
                 // We can also skip all of the thread pool blocking setup steps.
                 return Ok(());
             }
-        }
-
-        let cx = maybe_cx.expect("no .is_some() == false cases above should lead here");
+        };
 
         // Get the worker core. If none is set, then blocking is fine!
         let core = match cx.core.borrow_mut().take() {
             Some(core) => core,
-            None => return Ok(()),
+            None => {
+                // reset had_entered or else `Reset` might break
+                had_entered = false;
+                return Ok(());
+            }
         };
 
         // The parker should be set here
