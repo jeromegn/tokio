@@ -71,6 +71,7 @@ use crate::util::atomic_cell::AtomicCell;
 use crate::util::rand::{FastRand, RngSeedGenerator};
 
 use std::cell::RefCell;
+use std::sync::atomic::AtomicU16;
 use std::task::Waker;
 use std::time::Duration;
 
@@ -317,13 +318,17 @@ pub(super) fn create(
     (handle, launch)
 }
 
+tokio_thread_local! {
+    static RESET_COUNTER: AtomicU16 = AtomicU16::new(0);
+}
+
 #[track_caller]
 pub(crate) fn block_in_place<F, R>(f: F) -> R
 where
     F: FnOnce() -> R,
 {
     // Try to steal the worker core back
-    struct Reset(coop::Budget);
+    struct Reset(coop::Budget, u16);
 
     impl Drop for Reset {
         fn drop(&mut self) {
@@ -332,9 +337,10 @@ where
                     let core = cx.worker.core.take();
                     let mut cx_core = cx.core.borrow_mut();
                     println!(
-                        "({:?} {:?}) Reset dropped worker core is_some? {}, context core is_some? {}",
+                        "({:?} {:?}, ResetId({})) Reset dropped worker core is_some? {}, context core is_some? {}",
                         std::thread::current().id(),
                         std::thread::current().name(),
+                        self.1,
                         core.is_some(),
                         cx_core.is_some()
                     );
@@ -450,11 +456,13 @@ where
     }
 
     if had_entered {
+        let n =
+            RESET_COUNTER.with(|counter| counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
         // Unset the current task's budget. Blocking sections are not
         // constrained by task budgets.
-        let _reset = Reset(coop::stop());
+        let _reset = Reset(coop::stop(), n);
         println!(
-            "({:?} {:?}) block_in_place Reset has been instantiated",
+            "({:?} {:?}, ResetId({n})) block_in_place Reset has been instantiated",
             std::thread::current().id(),
             std::thread::current().name()
         );
